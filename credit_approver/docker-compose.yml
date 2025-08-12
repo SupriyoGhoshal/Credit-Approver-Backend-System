@@ -1,11 +1,18 @@
 version: '3.8'
 services:
   db:
-    image: postgres:15
+    image: postgres:17
     environment:
-      POSTGRES_DB: creditdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg-isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5 
+      start_period: 30s
+      timeout: 10s
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -19,6 +26,7 @@ services:
   web:
     build: .
     command: sh -c "python manage.py migrate && gunicorn project.wsgi:application --bind 0.0.0.0:8000"
+    container_name: app
     volumes:
       - .:/code
     ports:
@@ -26,8 +34,13 @@ services:
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/creditdb
     depends_on:
-      - db
-      - redis
+      db :
+        condition: service_healthy
+        restart: true
+      redis :
+        condition: service_started
+    env_file: 
+      - .env
 
   worker:
     build: .
